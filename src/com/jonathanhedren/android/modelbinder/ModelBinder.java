@@ -20,7 +20,6 @@ import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.Collection;
-import java.util.Map;
 
 import android.R.bool;
 import android.text.Editable;
@@ -28,6 +27,8 @@ import android.text.TextWatcher;
 import android.view.View;
 import android.widget.CompoundButton;
 import android.widget.CompoundButton.OnCheckedChangeListener;
+import android.widget.ListAdapter;
+import android.widget.ListView;
 import android.widget.RatingBar;
 import android.widget.RatingBar.OnRatingBarChangeListener;
 import android.widget.SeekBar;
@@ -67,6 +68,7 @@ public class ModelBinder {
 	 * @param rootView
 	 * @throws Exception
 	 */
+	@SuppressWarnings("rawtypes")
 	public void bind(final Object model, final View rootView) throws Exception {
 
 		if (model == null) {
@@ -74,16 +76,54 @@ public class ModelBinder {
 		}
 		
 		try {
+		
+			Class<?> modelType = model.getClass();
+			
+			if (!modelType.isArray() 
+					&& (modelType.isPrimitive() 
+					|| isWrapperType(modelType) 
+					|| String.class.isAssignableFrom(modelType))) {
+				
+				throw new IllegalArgumentException("Primitives/wrappers can not be bound on their own.");
+				
+			} else if (modelType.isAssignableFrom(Collection.class) || modelType.isArray()) {
+				
+				if (rootView instanceof ListView) {
+				
+					ListAdapter listAdapter = ((ListView)rootView).getAdapter();
+					
+					Object[] modelArray;
+					if (modelType.isArray()) {
+						modelArray = (Object[])model;
+					} else {
+						modelArray = ((Collection)model).toArray();
+					}
+					
+					int i = 0;
+					for (Object item : modelArray) {
+						bind(item, listAdapter.getView(i, null, null));
+						i++;
+					}
+				}
+				
+				return;
+			} 
+			
+			// TODO: Handle Map's
 			
 			final Field[] fields = model.getClass().getDeclaredFields();
 			final Method[] methods = model.getClass().getMethods();
 			
 			for (final Field field : fields) {
 				
-				final Class<?> fieldType = field.getType();
+				BindTo annotation = field.getAnnotation(BindTo.class);
 
+				final Class<?> fieldType = field.getType();
+				
 				Method getter = findGetter(methods, field.getName());
 				
+				// Get the value of the field either by a getter if it exist
+				// or by using reflection to set the field accessible.
 				Object fieldValue;
 				if (getter == null) {
 					if (!field.isAccessible()) {
@@ -94,29 +134,27 @@ public class ModelBinder {
 					fieldValue = getter.invoke(model, new Object[] { });
 				}
 				
-				if (Collection.class.isAssignableFrom(fieldType)|| Map.class.isAssignableFrom(fieldType)) {
-					// TODO: Support for binding a collection of views to a collection or map.
-					continue;
-				} else if (!fieldType.isPrimitive() && !isWrapperType(fieldType) && !String.class.isAssignableFrom(fieldType)) {
+				// Traverse down the object hierarchy
+				if (annotation == null 
+						&& !fieldType.isPrimitive() 
+						&& !isWrapperType(fieldType) 
+						&& !String.class.isAssignableFrom(fieldType)) {
+					
 					bind(fieldValue, rootView);
 					continue;
 				}
 				
-				BindTo annotation = field.getAnnotation(BindTo.class);
+				// Get all view ids to bind to
+				int[] viewIds = annotation.value();
 				
-				if (annotation == null) {
-					continue;
-				}
-				
-				int[] ids = annotation.value();
-				
-				for (int id : ids) {
+				for (int viewId : viewIds) {
 			
-					final View targetView = rootView.findViewById(id);
+					final View targetView = rootView.findViewById(viewId);
 					
 					if (targetView == null) {
 						continue;
 					}
+					
 					if (targetView instanceof CompoundButton) {
 						bindCompoundButton(model, methods, field, fieldValue, (CompoundButton)targetView, fieldType);
 					} else if (targetView instanceof TextView) {
@@ -125,6 +163,8 @@ public class ModelBinder {
 						bindSeekBar(model, methods, field, fieldValue, (SeekBar)targetView, fieldType);
 					} else if (targetView instanceof RatingBar) {
 						bindRatingBar(model, methods, field, fieldValue, (RatingBar)targetView, fieldType);
+					} else {
+						bind(fieldValue, targetView);
 					}
 				}
 			}
@@ -134,6 +174,18 @@ public class ModelBinder {
 		
 	}
 
+	/**
+	 * 
+	 * @param model
+	 * @param methods
+	 * @param field
+	 * @param fieldValue
+	 * @param targetView
+	 * @param fieldType
+	 * @throws IllegalArgumentException
+	 * @throws IllegalAccessException
+	 * @throws InvocationTargetException
+	 */
 	private void bindRatingBar(final Object model, final Method[] methods, final Field field, final Object fieldValue,
 			final RatingBar targetView, final Class<?> fieldType) 
 			throws IllegalArgumentException, IllegalAccessException, InvocationTargetException {
