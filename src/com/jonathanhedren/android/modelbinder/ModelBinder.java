@@ -20,16 +20,14 @@ import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.Collection;
+import java.util.Map;
 
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.util.Log;
 import android.view.View;
-import android.widget.ArrayAdapter;
 import android.widget.CompoundButton;
 import android.widget.CompoundButton.OnCheckedChangeListener;
-import android.widget.ListAdapter;
-import android.widget.ListView;
 import android.widget.RatingBar;
 import android.widget.RatingBar.OnRatingBarChangeListener;
 import android.widget.SeekBar;
@@ -70,7 +68,6 @@ public class ModelBinder {
 	 * @param rootView
 	 * @throws Exception
 	 */
-	@SuppressWarnings("rawtypes")
 	public void bind(final Object model, final View rootView) throws Exception {
 
 		if (model == null) {
@@ -80,42 +77,21 @@ public class ModelBinder {
 		try {
 		
 			Class<?> modelType = model.getClass();
+			if (model instanceof Collection 
+				|| modelType.isAssignableFrom(Collection.class) 
+				|| model instanceof Map
+				|| modelType.isAssignableFrom(Map.class)
+				|| modelType.isArray()) {
 			
-			if (!modelType.isArray() 
-					&& (modelType.isPrimitive() 
-					|| isWrapperType(modelType) 
-					|| String.class.isAssignableFrom(modelType))) {
+				throw new IllegalArgumentException("There is no support for Map/Collection/array types. Use a ListView and ArrayAdapter instead.");
+			
+			} else if (modelType.isPrimitive() 
+				|| isWrapperType(modelType) 
+				|| String.class.isAssignableFrom(modelType)) {
 				
 				throw new IllegalArgumentException("Primitives/wrappers can not be bound on their own.");
 				
-			} else if (model instanceof Collection || modelType.isAssignableFrom(Collection.class) || modelType.isArray()) {
-				
-				if (rootView instanceof ListView) {
-				
-					ListAdapter listAdapter = ((ListView)rootView).getAdapter();
-					
-					if (listAdapter == null) {
-						return;
-					}
-					
-					Object[] modelArray;
-					if (modelType.isArray()) {
-						modelArray = (Object[])model;
-					} else {
-						modelArray = ((Collection)model).toArray();
-					}
-					
-					int i = 0;
-					for (Object item : modelArray) {
-						bind(item, listAdapter.getView(i, null, null));
-						i++;
-					}
-				}
-				
-				return;
 			} 
-			
-			// TODO: Handle Map's
 			
 			final Field[] fields = model.getClass().getDeclaredFields();
 			final Method[] methods = model.getClass().getMethods();
