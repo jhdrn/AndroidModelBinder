@@ -4,6 +4,15 @@
       android:versionCode="1"
       android:versionName="1.0">
 	<uses-sdk android:minSdkVersion="4" android:targetSdkVersion="8"/>
-
-	<application android:debuggable="true"/>
+	<instrumentation android:targetPackage="com.jonathanhedren.android.modelbinder" android:name="android.test.InstrumentationTestRunner" />
+    
+	<application android:debuggable="true">
+		<activity android:name=".test.ModelBinderTestActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+		</activity>
+		<uses-library android:name="android.test.runner" />
+	</application>
 </manifest>
