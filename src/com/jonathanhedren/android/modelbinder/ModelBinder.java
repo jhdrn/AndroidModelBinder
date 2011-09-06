@@ -21,10 +21,11 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.Collection;
 
-import android.R.bool;
 import android.text.Editable;
 import android.text.TextWatcher;
+import android.util.Log;
 import android.view.View;
+import android.widget.ArrayAdapter;
 import android.widget.CompoundButton;
 import android.widget.CompoundButton.OnCheckedChangeListener;
 import android.widget.ListAdapter;
@@ -37,14 +38,15 @@ import android.widget.TextView;
 
 public class ModelBinder {
 
-	//private Map<Field, View> mFieldViewMap = new HashMap<Field, View>();
+	private static final String LOG_TAG = ModelBinder.class.getName();
+	private static final String NULL_TEXT = "null";
+	private static final String EMPTY_STRING = "";
 	
 	private OnModelUpdateListener mOnModelUpdateListener;
 
 	public interface OnModelUpdateListener {
 		void modelUpdated(Object model, Field field);
 	}
-
 	
 	/**
 	 * @param onModelUpdateListener
@@ -86,11 +88,15 @@ public class ModelBinder {
 				
 				throw new IllegalArgumentException("Primitives/wrappers can not be bound on their own.");
 				
-			} else if (modelType.isAssignableFrom(Collection.class) || modelType.isArray()) {
+			} else if (model instanceof Collection || modelType.isAssignableFrom(Collection.class) || modelType.isArray()) {
 				
 				if (rootView instanceof ListView) {
 				
 					ListAdapter listAdapter = ((ListView)rootView).getAdapter();
+					
+					if (listAdapter == null) {
+						return;
+					}
 					
 					Object[] modelArray;
 					if (modelType.isArray()) {
@@ -190,8 +196,8 @@ public class ModelBinder {
 			final RatingBar targetView, final Class<?> fieldType) 
 			throws IllegalArgumentException, IllegalAccessException, InvocationTargetException {
 
-		if (fieldType != float.class) {
-			throw new IllegalArgumentException("Views of 'RatingBar' type can only be bound to a fields of 'float' type.");
+		if (fieldType != float.class && fieldType != Float.class) {
+			throw new IllegalArgumentException("Views of 'RatingBar' type can only be bound to a fields of 'float' or 'Float' type.");
 		}
 		
 		// Set the model value to the view.
@@ -224,8 +230,7 @@ public class ModelBinder {
 					modelUpdated(model, field);
 					
 				} catch (Exception e) {
-					// TODO: handle exception
-					e.printStackTrace();
+					Log.e(LOG_TAG, "Could not set RatingBar value to model field.", e);
 				}	
 			}
 		});
@@ -247,8 +252,8 @@ public class ModelBinder {
 			final SeekBar targetView, final Class<?> fieldType) 
 			throws IllegalArgumentException, IllegalAccessException, InvocationTargetException {
 		
-		if (fieldType != int.class) {
-			throw new IllegalArgumentException("Views of 'ProgressBar' type can only be bound to a fields of 'int' type.");
+		if (fieldType != int.class && fieldType != Integer.class) {
+			throw new IllegalArgumentException("Views of 'SeekBar' type can only be bound to a fields of 'int' or 'Integer' type.");
 		}
 		
 		// Set the model value to the view.
@@ -288,8 +293,7 @@ public class ModelBinder {
 					modelUpdated(model, field);
 
 				} catch (Exception e) {
-					// TODO: handle exception
-					e.printStackTrace();
+					Log.e(LOG_TAG, "Could not SeekBar value to model field.", e);
 				}	
 			}
 		});
@@ -307,11 +311,15 @@ public class ModelBinder {
 	 * @throws InvocationTargetException
 	 */
 	private void bindCompoundButton(final Object model, final Method[] methods,
-			final Field field, final Object fieldValue, final CompoundButton targetView, final Class<?> fieldType)
+			final Field field, Object fieldValue, final CompoundButton targetView, final Class<?> fieldType)
 			throws IllegalArgumentException, IllegalAccessException, InvocationTargetException {
 		
-		if (fieldType != bool.class) {
-			throw new IllegalArgumentException("Views of 'CompoundButton' type can only be bound to a fields of 'boolean' type.");
+		if (fieldType != boolean.class && fieldType != Boolean.class) {
+			throw new IllegalArgumentException("Views of 'CompoundButton' type can only be bound to a fields of 'boolean' or 'Boolean' type.");
+		}
+		
+		if (fieldValue == null) {
+			fieldValue = false;
 		}
 		
 		// Set the model value to the view.
@@ -329,7 +337,13 @@ public class ModelBinder {
 						if (!field.isAccessible()) {
 							field.setAccessible(true);
 						}
-						field.setBoolean(model, isChecked);
+						
+						if (fieldType.isPrimitive()) {
+							field.setBoolean(model, isChecked);	
+						} else {
+							field.set(model, isChecked);
+						}
+						
 					} else {
 						setter.invoke(model, isChecked);
 					}
@@ -337,8 +351,7 @@ public class ModelBinder {
 					modelUpdated(model, field);
 					
 				} catch (Exception e) {
-					// TODO handle exception
-					e.printStackTrace();
+					Log.e(LOG_TAG, "Could not set CompoundButton value to model field.", e);
 				}
 			}
 		});
@@ -361,7 +374,11 @@ public class ModelBinder {
 			InvocationTargetException {
 
 		// Set the model value to the view.
-		targetView.setText(String.valueOf(fieldValue));
+		if (fieldValue == null) {
+			targetView.setText(null);
+		} else {
+			targetView.setText(String.valueOf(fieldValue));
+		}
 		
 		// Add a listener for focus changes that will updated the model field whenever
 		// focus is lost from the view.
@@ -371,6 +388,11 @@ public class ModelBinder {
 			public void onTextChanged(CharSequence s, int start, int before, int count) {
 				
 				String text = s.toString();
+				
+				if (fieldType.isPrimitive() && (text == null || text.trim().equals(EMPTY_STRING))) {
+					return;
+				}
+				
 				try {
 					
 					Method setter = findSetter(methods, field.getName());
@@ -379,41 +401,57 @@ public class ModelBinder {
 						if (!field.isAccessible()) {
 							field.setAccessible(true);
 						}
-						
-						if (fieldType == int.class) {
-							field.setInt(model, Integer.valueOf(text));
+						if (text.equals(NULL_TEXT)) {
+							field.set(model, null);
+						} else if (fieldType == int.class || fieldType == Integer.class) {
+							if (!EMPTY_STRING.equals(text)) {
+								field.setInt(model, Integer.valueOf(text));
+							}
 						} else if (fieldType == long.class || fieldType == Long.class) {
-							field.setLong(model, Long.valueOf(text));
-						} else if (fieldType == float.class) {
-							field.setFloat(model, Float.valueOf(text));
+							if (!EMPTY_STRING.equals(text)) {
+								field.setLong(model, Long.valueOf(text));
+							}
+						} else if (fieldType == float.class || fieldType == Float.class) {
+							if (!EMPTY_STRING.equals(text)) {
+								field.setFloat(model, Float.valueOf(text));
+							}
 						} else if (fieldType == double.class || fieldType == Double.class) {
-							field.setDouble(model, Double.valueOf(text));
+							if (!EMPTY_STRING.equals(text)) {
+								field.setDouble(model, Double.valueOf(text));
+							}
 						} else {
 							field.set(model, text);
 						}
 					} else {
 						Class<?>[] parameterTypes = setter.getParameterTypes();
-						Object[] args;
-						if (parameterTypes[0] == int.class) {
-							args = new Object[] { Integer.valueOf(text) };
-						} else if (parameterTypes[0] == long.class) {
-							args = new Object[] { Long.valueOf(text) };
-						} else if (parameterTypes[0] == float.class) {
-							args = new Object[] { Float.valueOf(text) };
-						} else if (parameterTypes[0] == double.class) {
-							args = new Object[] { Double.valueOf(text) };
-						} else {
-							args = new Object[] { text };
-						}
 						
-						setter.invoke(model, args);
+						if (text.equals(NULL_TEXT)) {
+							setter.invoke(model, (Object)null);
+						} else if (parameterTypes[0] == int.class || parameterTypes[0] == Integer.class) {
+							if (!EMPTY_STRING.equals(text)) {
+								setter.invoke(model, Integer.valueOf(text));
+							}
+						} else if (parameterTypes[0] == long.class || parameterTypes[0] == Long.class) {
+							if (!EMPTY_STRING.equals(text)) {
+								setter.invoke(model, Long.valueOf(text));
+							}
+						} else if (parameterTypes[0] == float.class || parameterTypes[0] == Float.class) {
+							if (!EMPTY_STRING.equals(text)) {
+								setter.invoke(model, Float.valueOf(text));
+							}
+						} else if (parameterTypes[0] == double.class || parameterTypes[0] == Double.class) {
+							if (!EMPTY_STRING.equals(text)) {
+								setter.invoke(model, Double.valueOf(text));
+							}
+						} else {
+							setter.invoke(model, text);
+						}
 					}
 					
 					modelUpdated(model, field);
 					
 				} catch (Exception e) {
-					// TODO: handle exception
-					e.printStackTrace();
+					Log.e(LOG_TAG, "Could not set text to model field.", e);
 				}
 				
 			}
@@ -439,7 +477,7 @@ public class ModelBinder {
 	private static Method findSetter(final Method[] methods, final String fieldName) {
 		final String setterName = String.format("set%s", uppercaseFirst(fieldName)); 
 		for (Method method : methods) {
-			if (method.getName() == setterName) {
+			if (method.getName().equals(setterName)) {
 				return method;
 			}
 		}
@@ -455,7 +493,7 @@ public class ModelBinder {
 	private static Method findGetter(final Method[] methods, final String fieldName) {
 		final String getterName = String.format("get%s", uppercaseFirst(fieldName)); 
 		for (Method method : methods) {
-			if (method.getName() == getterName) {
+			if (method.getName().equals(getterName)) {
 				return method;
 			}
 		}
