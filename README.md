@@ -35,7 +35,7 @@ Then create a value object class where we bind the "text" field to the TextView 
 	public class ExampleModel {
 
 		// The BindTo annotation binds the field to a view id.	
-		@BindTo(R.id.textView)
+		@BindTo(R.id.textView1)
 	    private String text;
 	
 		// Setters/getters will be used if they exists. 
