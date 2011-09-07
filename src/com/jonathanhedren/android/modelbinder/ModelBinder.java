@@ -116,13 +116,15 @@ public class ModelBinder {
 					fieldValue = getter.invoke(model, new Object[] { });
 				}
 				
-				// Traverse down the object hierarchy
-				if (annotation == null 
-						&& !fieldType.isPrimitive() 
-						&& !isWrapperType(fieldType) 
-						&& !String.class.isAssignableFrom(fieldType)) {
-					
-					bind(fieldValue, rootView);
+				if (annotation == null) {
+				
+					// Traverse down the object hierarchy
+					if (!fieldType.isPrimitive() 
+							&& !isWrapperType(fieldType) 
+							&& !String.class.isAssignableFrom(fieldType)) {
+				
+						bind(fieldValue, rootView);
+					}
 					continue;
 				}
 				
