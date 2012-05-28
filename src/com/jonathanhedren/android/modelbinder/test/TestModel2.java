@@ -5,7 +5,7 @@ import com.jonathanhedren.android.modelbinder.R;
 
 public class TestModel2 {
 	
-	@BindTo(R.id.textView1)
+	@BindTo("textView1")
 	private String text;
 
 	public void setText(String text) {

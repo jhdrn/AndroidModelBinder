@@ -11,7 +11,7 @@ import com.jonathanhedren.android.modelbinder.R;
 
 public class ModelBinderTestActivity extends Activity {
 
-	private ModelBinder mModelBinder = new ModelBinder();
+	private ModelBinder mModelBinder = ModelBinder.newInstance(R.id.class);
 
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
@@ -33,14 +33,7 @@ public class ModelBinderTestActivity extends Activity {
 		
 		setContentView(rootView);
 		
-		try {
-			
-			mModelBinder.bind(model, rootView);
-			
-		} catch (Exception e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
+		mModelBinder.bind(model, rootView);
 	}
 	
 }

@@ -1,36 +1,35 @@
 package com.jonathanhedren.android.modelbinder.test;
 
 import com.jonathanhedren.android.modelbinder.BindTo;
-import com.jonathanhedren.android.modelbinder.R;
 
 public class TestModel {
 
-	@BindTo({ R.id.checkBox1, R.id.radioButton1 })
+	@BindTo({ "checkBox1", "radioButton1" })
 	private boolean primBool;
 	
-	@BindTo(R.id.seekBar1)
+	@BindTo("seekBar1")
 	private int primInt;
 
-	@BindTo(R.id.ratingBar1)
+	@BindTo("ratingBar1")
 	private float primFloat;
 	
 	@SuppressWarnings("unused")
-	@BindTo(R.id.toggleButton1)
+	@BindTo("toggleButton1")
 	private Boolean wrappedBool;
 	
-	@BindTo(R.id.editText3)
+	@BindTo("editText3")
 	private String text;
 	
-	@BindTo(R.id.editTextSigned)
+	@BindTo("editTextSigned")
 	private Integer wrappedInt;
 	
-	@BindTo(R.id.editTextSigned)
+	@BindTo("editTextSigned")
 	private Long wrappedLong;
 	
-	@BindTo(R.id.editTextDecimal)
+	@BindTo("editTextDecimal")
 	private Double wrappedDouble;
 	
-	@BindTo(R.id.editTextDecimal)
+	@BindTo("editTextDecimal")
 	private Float wrappedFloat;
 	
 	private TestModel2 testModel2;
