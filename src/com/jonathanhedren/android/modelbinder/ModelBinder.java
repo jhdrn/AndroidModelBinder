@@ -19,7 +19,11 @@ package com.jonathanhedren.android.modelbinder;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import android.text.Editable;
@@ -41,9 +45,108 @@ public class ModelBinder {
 	private static final String EMPTY_STRING = "";
 	
 	private OnModelUpdateListener mOnModelUpdateListener;
+	private OnViewUpdateListener mOnViewUpdateListener;
+	private Class<?> mResourceClass;
 
 	public interface OnModelUpdateListener {
-		void modelUpdated(Object model, Field field);
+		/**
+		 * 
+		 * @param view
+		 * @param field
+		 * @return 
+		 */
+		boolean onModelUpdate(View view, Field field);
+	}
+	
+	
+	public interface OnViewUpdateListener {
+		/**
+		 * 
+		 * @param value 
+		 * @param v the view which the value will be bound to.
+		 * @return the value
+		 */
+		Object onViewUpdate(Object value, View v);
+	}
+	
+	private static class ModelMetadata<T> {
+
+		private static final String LOG_TAG = ModelMetadata.class.getName();
+		private static Map<Class<?>, ModelMetadata<?>> mModelMetadataMap = new HashMap<Class<?>, ModelMetadata<?>>();
+
+		private Class<T> mModelClass;
+		private List<Field> mFields;
+		private Method[] mMethods;
+
+		/**
+		 * @throws NoSuchMethodException
+		 * @throws SecurityException
+		 * 
+		 */
+		@SuppressWarnings("unchecked")
+		public static <T> ModelMetadata<T> getInstance(final Class<T> clazz) {
+			ModelMetadata<?> modelMetadata = mModelMetadataMap.get(clazz);
+			if (modelMetadata == null) {
+				modelMetadata = new ModelMetadata<T>(clazz);
+				mModelMetadataMap.put(clazz, modelMetadata);
+			}
+			return (ModelMetadata<T>) modelMetadata;
+		}
+
+		private ModelMetadata(final Class<T> clazz) {
+
+			mFields = getAllFields(clazz);
+			mMethods = clazz.getMethods();
+			mModelClass = clazz;
+		}
+
+		public List<Field> getFields() {
+			return mFields;
+		}
+
+		public Method[] getMethods() {
+			return mMethods;
+		}
+
+		public Class<T> getModelClass() {
+			return mModelClass;
+		}
+		
+		/**
+		 * Return the set of fields declared at all level of class hierarchy
+		 */
+		private List<Field> getAllFields(final Class<?> clazz) {
+			return getAllFieldsRecursively(clazz, new ArrayList<Field>());
+		}
+
+		private List<Field> getAllFieldsRecursively(final Class<?> clazz,
+				final List<Field> foundFields) {
+			final Class<?> superClazz = clazz.getSuperclass();
+			if (superClazz != null) {
+				getAllFieldsRecursively(superClazz, foundFields);
+			}
+			foundFields.addAll(Arrays.asList(clazz.getDeclaredFields()));
+			return foundFields;
+		}
+
+		public BindTo getAnnotation(Field field) {
+			// FIXME
+			return field.getAnnotation(BindTo.class);
+		}
+
+		public Class<?> getFieldType(Field field) {
+			// TODO Auto-generated method stub
+			return field.getType();
+		}
+
+	}
+		
+	public ModelBinder(final Class<?> resourceClass) {
+		if (resourceClass == null) {
+			Log.e(LOG_TAG, "The resourceClass parameter cannot be null. It should be R.id.class of your project");
+		}
+		
+		mResourceClass = resourceClass;
 	}
 	
 	/**
@@ -54,55 +157,76 @@ public class ModelBinder {
 	}
 	
 	/**
+	 * 
+	 * @param onViewUpdateListener
+	 */
+	public void setOnViewUpdateListener(final OnViewUpdateListener onViewUpdateListener) {
+		mOnViewUpdateListener = onViewUpdateListener;
+	}
+	
+	/**
 	 * @param field
 	 */
-	private void modelUpdated(final Object model, final Field field) {
+	private boolean onModelUpdate(final View view, final Field field) {
 		if (mOnModelUpdateListener != null) {
-			mOnModelUpdateListener.modelUpdated(model, field);
+			return mOnModelUpdateListener.onModelUpdate(view, field);
 		}
+		return false;
+	}
+	
+	private Object onViewUpdate(final Object value, final View view) {
+		if (mOnViewUpdateListener != null) {
+			return mOnViewUpdateListener.onViewUpdate(value, view);
+		}
+		return value;
+	}
+	
+	public static ModelBinder newInstance(final Class<?> resourceClass) {
+		return new ModelBinder(resourceClass);
 	}
 	
 	/**
 	 * 
 	 * @param model
 	 * @param rootView
-	 * @throws Exception
+	 * @param resourceClass eg. R.id.class
 	 */
-	public void bind(final Object model, final View rootView) throws Exception {
-
+	public void bind(final Object model, final View rootView) {
+		
 		if (model == null) {
 			return;
 		}
 		
 		try {
 		
-			Class<?> modelType = model.getClass();
+			final Class<?> modelType = model.getClass();
+			ModelMetadata<?> modelMetadata = ModelMetadata.getInstance(modelType);
+			
 			if (model instanceof Collection 
 				|| modelType.isAssignableFrom(Collection.class) 
 				|| model instanceof Map
 				|| modelType.isAssignableFrom(Map.class)
 				|| modelType.isArray()) {
 			
-				throw new IllegalArgumentException("There is no support for Map/Collection/array types. Use a ListView and ArrayAdapter instead.");
-			
+				Log.w(LOG_TAG, "There is no support for Map/Collection/array types. Use a ListView and ArrayAdapter instead.");
+				return;
 			} else if (modelType.isPrimitive() 
 				|| isWrapperType(modelType) 
 				|| String.class.isAssignableFrom(modelType)) {
-				
-				throw new IllegalArgumentException("Primitives/wrappers can not be bound on their own.");
-				
+				Log.w(LOG_TAG, "Primitives/wrappers can not be bound on their own.");
+				return;
 			} 
 			
-			final Field[] fields = model.getClass().getDeclaredFields();
-			final Method[] methods = model.getClass().getMethods();
+			final Method[] methods = modelMetadata.getMethods();
 			
-			for (final Field field : fields) {
+			for (final Field field : modelMetadata.getFields()) {
 				
-				BindTo annotation = field.getAnnotation(BindTo.class);
-
-				final Class<?> fieldType = field.getType();
+				final BindTo annotation = modelMetadata.getAnnotation(field);
+				final Class<?> fieldType = modelMetadata.getFieldType(field);
+			
 				
-				Method getter = findGetter(methods, field.getName());
+				final Method getter = findGetter(methods, field.getName());
+//				FIXME: modelMetatadata.getGetter(field);
 				
 				// Get the value of the field either by a getter if it exist
 				// or by using reflection to set the field accessible.
@@ -129,10 +253,12 @@ public class ModelBinder {
 				}
 				
 				// Get all view ids to bind to
-				int[] viewIds = annotation.value();
+				final String[] viewIds = annotation.value();
 				
-				for (int viewId : viewIds) {
-			
+				for (String stringViewId : viewIds) {
+							
+					final int viewId = getResId(stringViewId);
+					
 					final View targetView = rootView.findViewById(viewId);
 					
 					if (targetView == null) {
@@ -153,7 +279,7 @@ public class ModelBinder {
 				}
 			}
 		} catch (Exception e) {
-			throw new Exception("Could not bind the model to the view.", e);
+			Log.w(LOG_TAG, "Could not bind the model to the view: " + e.getMessage());
 		}
 		
 	}
@@ -170,12 +296,18 @@ public class ModelBinder {
 	 * @throws IllegalAccessException
 	 * @throws InvocationTargetException
 	 */
-	private void bindRatingBar(final Object model, final Method[] methods, final Field field, final Object fieldValue,
+	private void bindRatingBar(final Object model, final Method[] methods, final Field field, Object fieldValue,
 			final RatingBar targetView, final Class<?> fieldType) 
 			throws IllegalArgumentException, IllegalAccessException, InvocationTargetException {
 
-		if (fieldType != float.class && fieldType != Float.class) {
-			throw new IllegalArgumentException("Views of 'RatingBar' type can only be bound to a fields of 'float' or 'Float' type.");
+
+		fieldValue = onViewUpdate(fieldValue, targetView);
+
+		if (fieldValue != null) {
+			final Class<? extends Object> fieldValueType = fieldValue.getClass();
+			if (fieldValueType != float.class && fieldValueType != Float.class) {
+				throw new IllegalArgumentException("Views of 'RatingBar' type can only be bound to a fields of 'float' or 'Float' type.");
+			}
 		}
 		
 		// Set the model value to the view.
@@ -192,6 +324,10 @@ public class ModelBinder {
 					return;
 				}
 				
+				if (onModelUpdate(ratingBar, field)) {
+					return;
+				}
+				
 				try {
 					
 					Method setter = findSetter(methods, field.getName());
@@ -205,7 +341,7 @@ public class ModelBinder {
 						setter.invoke(model, new Object[] { rating });
 					}
 					
-					modelUpdated(model, field);
+					
 					
 				} catch (Exception e) {
 					Log.e(LOG_TAG, "Could not set RatingBar value to model field.", e);
@@ -226,12 +362,18 @@ public class ModelBinder {
 	 * @throws IllegalAccessException
 	 * @throws InvocationTargetException
 	 */
-	private void bindSeekBar(final Object model, final Method[] methods, final Field field, final Object fieldValue,
+	private void bindSeekBar(final Object model, final Method[] methods, final Field field, Object fieldValue,
 			final SeekBar targetView, final Class<?> fieldType) 
 			throws IllegalArgumentException, IllegalAccessException, InvocationTargetException {
 		
-		if (fieldType != int.class && fieldType != Integer.class) {
-			throw new IllegalArgumentException("Views of 'SeekBar' type can only be bound to a fields of 'int' or 'Integer' type.");
+	
+		fieldValue = onViewUpdate(fieldValue, targetView);
+
+		if (fieldValue != null) {
+			final Class<? extends Object> fieldValueType = fieldValue.getClass();
+			if (fieldValueType != int.class && fieldValueType != Integer.class) {
+				throw new IllegalArgumentException("Views of 'SeekBar' type can only be bound to a fields of 'int' or 'Integer' type.");
+			}
 		}
 		
 		// Set the model value to the view.
@@ -254,6 +396,10 @@ public class ModelBinder {
 				if (!fromUser) {
 					return;
 				}
+
+				if (onModelUpdate(seekBar, field)) {
+					return;
+				}
 				
 				try {
 					
@@ -268,7 +414,6 @@ public class ModelBinder {
 						setter.invoke(model, new Object[] { progress });
 					}
 
-					modelUpdated(model, field);
 
 				} catch (Exception e) {
 					Log.e(LOG_TAG, "Could not SeekBar value to model field.", e);
@@ -292,13 +437,19 @@ public class ModelBinder {
 			final Field field, Object fieldValue, final CompoundButton targetView, final Class<?> fieldType)
 			throws IllegalArgumentException, IllegalAccessException, InvocationTargetException {
 		
-		if (fieldType != boolean.class && fieldType != Boolean.class) {
-			throw new IllegalArgumentException("Views of 'CompoundButton' type can only be bound to a fields of 'boolean' or 'Boolean' type.");
-		}
 		
-		if (fieldValue == null) {
+		fieldValue = onViewUpdate(fieldValue, targetView);
+
+		if (fieldValue != null) {
+			
+			final Class<? extends Object> fieldValueType = fieldValue.getClass();
+			if (fieldValueType != boolean.class && fieldValueType != Boolean.class) {
+				throw new IllegalArgumentException("Views of 'CompoundButton' type can only be bound to a fields of 'boolean' or 'Boolean' type.");
+			}
+		} else {
 			fieldValue = false;
 		}
+		
 		
 		// Set the model value to the view.
 		targetView.setChecked((Boolean)fieldValue);
@@ -308,9 +459,15 @@ public class ModelBinder {
 			
 			@Override
 			public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
+
+				if (onModelUpdate(buttonView, field)) {
+					return;
+				}
+				
 				try {
+					
 					Method setter = findSetter(methods, field.getName());
-						
+					
 					if (setter == null) {
 						if (!field.isAccessible()) {
 							field.setAccessible(true);
@@ -325,8 +482,6 @@ public class ModelBinder {
 					} else {
 						setter.invoke(model, isChecked);
 					}
-				
-					modelUpdated(model, field);
 					
 				} catch (Exception e) {
 					Log.e(LOG_TAG, "Could not set CompoundButton value to model field.", e);
@@ -347,10 +502,12 @@ public class ModelBinder {
 	 * @throws InvocationTargetException
 	 */
 	private void bindTextView(final Object model, final Method[] methods,
-			final Field field, final Object fieldValue, final TextView targetView, final Class<?> fieldType)
+			final Field field, Object fieldValue, final TextView targetView, final Class<?> fieldType)
 			throws IllegalAccessException, IllegalArgumentException,
 			InvocationTargetException {
 
+		fieldValue = onViewUpdate(fieldValue, targetView);
+		
 		// Set the model value to the view.
 		if (fieldValue == null) {
 			targetView.setText(null);
@@ -364,6 +521,11 @@ public class ModelBinder {
 			
 			@Override
 			public void onTextChanged(CharSequence s, int start, int before, int count) {
+				
+
+				if (onModelUpdate(targetView, field)) {
+					return;
+				}
 				
 				String text = s.toString();
 				
@@ -425,8 +587,6 @@ public class ModelBinder {
 							setter.invoke(model, text);
 						}
 					}
-					
-					modelUpdated(model, field);
 					
 				} catch (Exception e) {
 					Log.e(LOG_TAG, "Could not set text to model field.", e);
@@ -502,6 +662,15 @@ public class ModelBinder {
                type.equals(Long.class) ||
                type.equals(Float.class);
 	}
-	
 
+	private int getResId(String variableName) {
+
+	    try {
+	        Field idField = mResourceClass.getDeclaredField(variableName);
+	        return idField.getInt(idField);
+	    } catch (Exception e) {
+	        e.printStackTrace();
+	        return -1;
+	    } 
+	}
 }
