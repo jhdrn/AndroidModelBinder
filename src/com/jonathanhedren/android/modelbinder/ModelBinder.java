@@ -78,11 +78,6 @@ public class ModelBinder {
 		private List<Field> mFields;
 		private Method[] mMethods;
 
-		/**
-		 * @throws NoSuchMethodException
-		 * @throws SecurityException
-		 * 
-		 */
 		@SuppressWarnings("unchecked")
 		public static <T> ModelMetadata<T> getInstance(final Class<T> clazz) {
 			ModelMetadata<?> modelMetadata = mModelMetadataMap.get(clazz);
@@ -130,12 +125,12 @@ public class ModelBinder {
 		}
 
 		public BindTo getAnnotation(Field field) {
-			// FIXME
+			// TODO: Annotations should be cached
 			return field.getAnnotation(BindTo.class);
 		}
 
 		public Class<?> getFieldType(Field field) {
-			// TODO Auto-generated method stub
+			// TODO: Field types should be cached (??)
 			return field.getType();
 		}
 
@@ -165,6 +160,7 @@ public class ModelBinder {
 	}
 	
 	/**
+	 * @param view
 	 * @param field
 	 */
 	private boolean onModelUpdate(final View view, final Field field) {
@@ -174,6 +170,10 @@ public class ModelBinder {
 		return false;
 	}
 	
+	/**
+	 * @param value
+	 * @param view 
+	 */
 	private Object onViewUpdate(final Object value, final View view) {
 		if (mOnViewUpdateListener != null) {
 			return mOnViewUpdateListener.onViewUpdate(value, view);
@@ -181,6 +181,11 @@ public class ModelBinder {
 		return value;
 	}
 	
+	/**
+	 * Factory method to create a new ModelBinder instance.
+	 *
+	 * @param resourceClass the R.id.class of your project
+	 */
 	public static ModelBinder newInstance(final Class<?> resourceClass) {
 		return new ModelBinder(resourceClass);
 	}
@@ -189,7 +194,6 @@ public class ModelBinder {
 	 * 
 	 * @param model
 	 * @param rootView
-	 * @param resourceClass eg. R.id.class
 	 */
 	public void bind(final Object model, final View rootView) {
 		
@@ -226,7 +230,7 @@ public class ModelBinder {
 			
 				
 				final Method getter = findGetter(methods, field.getName());
-//				FIXME: modelMetatadata.getGetter(field);
+//				TODO: modelMetatadata.getGetter(field); i.e. get/set:ers should be cached.
 				
 				// Get the value of the field either by a getter if it exist
 				// or by using reflection to set the field accessible.
@@ -344,7 +348,7 @@ public class ModelBinder {
 					
 					
 				} catch (Exception e) {
-					Log.e(LOG_TAG, "Could not set RatingBar value to model field.", e);
+					Log.e(LOG_TAG, "Could not set the RatingBar value to model field.", e);
 				}	
 			}
 		});
@@ -416,7 +420,7 @@ public class ModelBinder {
 
 
 				} catch (Exception e) {
-					Log.e(LOG_TAG, "Could not SeekBar value to model field.", e);
+					Log.e(LOG_TAG, "Could not set the SeekBar value to model field.", e);
 				}	
 			}
 		});
@@ -484,7 +488,7 @@ public class ModelBinder {
 					}
 					
 				} catch (Exception e) {
-					Log.e(LOG_TAG, "Could not set CompoundButton value to model field.", e);
+					Log.e(LOG_TAG, "Could not set the CompoundButton value to model field.", e);
 				}
 			}
 		});
@@ -589,7 +593,7 @@ public class ModelBinder {
 					}
 					
 				} catch (Exception e) {
-					Log.e(LOG_TAG, "Could not set text to model field.", e);
+					Log.e(LOG_TAG, "Could not set the text to the model field.", e);
 				}
 				
 			}
@@ -653,24 +657,24 @@ public class ModelBinder {
 	 * @return
 	 */
 	private static boolean isWrapperType(Class<?> type) {
-        return type.equals(Boolean.class) || 
-               type.equals(Integer.class) ||
-               type.equals(Character.class) ||
-               type.equals(Byte.class) ||
-               type.equals(Short.class) ||
-               type.equals(Double.class) ||
-               type.equals(Long.class) ||
-               type.equals(Float.class);
+		return type.equals(Boolean.class) || 
+		       type.equals(Integer.class) ||
+		       type.equals(Character.class) ||
+		       type.equals(Byte.class) ||
+		       type.equals(Short.class) ||
+		       type.equals(Double.class) ||
+		       type.equals(Long.class) ||
+		       type.equals(Float.class);
 	}
 
 	private int getResId(String variableName) {
 
-	    try {
-	        Field idField = mResourceClass.getDeclaredField(variableName);
-	        return idField.getInt(idField);
-	    } catch (Exception e) {
-	        e.printStackTrace();
-	        return -1;
-	    } 
+		try {
+			Field idField = mResourceClass.getDeclaredField(variableName);
+			return idField.getInt(idField);
+		} catch (Exception e) {
+			e.printStackTrace();
+			return -1;
+		} 
 	}
 }
