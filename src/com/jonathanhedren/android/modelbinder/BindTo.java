@@ -26,5 +26,5 @@ import java.lang.annotation.Target;
 @Target({ ElementType.FIELD, ElementType.METHOD })
 @Inherited
 public @interface BindTo {
-	int[] value();
+	String[] value();
 }
