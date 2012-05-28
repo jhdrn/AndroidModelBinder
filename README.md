@@ -35,7 +35,7 @@ Then create a value object class where we bind the "text" field to the TextView 
 	public class ExampleModel {
 
 		// The BindTo annotation binds the field to a view id.	
-		@BindTo(R.id.textView)
+		@BindTo("textView1")
 	    private String text;
 	
 		// Setters/getters will be used if they exists. 
@@ -55,7 +55,7 @@ Then create an activity to execute the actual binding:
 	public class ExampleActivity extends Activity {
 	
 		// Create an instance of the ModelBinder class.
-		private ModelBinder mModelBinder = new ModelBinder();
+		private ModelBinder mModelBinder = ModelBinder.newInstance(R.id.class);
 
 		@Override
 		protected void onCreate(Bundle savedInstanceState) {
@@ -71,14 +71,10 @@ Then create an activity to execute the actual binding:
 			
 			setContentView(rootView);
 			
-			try {
-				// Bind the model to the view
-				mModelBinder.bind(model, rootView);
-				
-			} catch (Exception e) {
-				e.printStackTrace();
-			}
+			// Bind the model to the view
+			mModelBinder.bind(model, rootView);
+			
 		}
 	}
 
-The result in the simple example above will be that the TextView we've bound, will be populated with the text "Example text".
+The result in the simple example above will be that the TextView we've bound will be populated with the text "Example text".
